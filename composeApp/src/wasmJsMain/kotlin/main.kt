@@ -1,0 +1,13 @@
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.window.ComposeViewport
+import com.letsdrive.app.App
+import kotlinx.browser.document
+
+@OptIn(ExperimentalComposeUiApi::class)
+fun main() {
+    val root = document.getElementById("root") ?: document.body!!
+    ComposeViewport(root) {
+        App()
+    }
+}
+

@@ -1,0 +1,16 @@
+# Gradle & Kotlin caches
+.gradle/
+.kotlin/
+build/
+**/build/
+
+# IDE & Local config
+.idea/
+*.iml
+local.properties
+.DS_Store
+
+# Xcode user data
+iosApp/iosApp.xcodeproj/xcuserdata/
+iosApp/iosApp.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
