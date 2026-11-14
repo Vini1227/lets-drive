@@ -4,7 +4,9 @@ import com.letsdrive.app.data.model.ParticipantDto
 import com.letsdrive.app.data.model.ParticipantLocationDto
 import com.letsdrive.app.data.model.SeparationCheckResultDto
 import com.letsdrive.app.data.model.TripDto
+import com.letsdrive.app.data.model.UserProfileDto
 import com.letsdrive.app.data.remote.SupabaseConfig
+import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -47,15 +49,45 @@ class TripRemoteRepository {
     }
 
     /**
-     * Registra o participante na viagem.
+     * Busca uma viagem pelo ID para sincronizar limite de separação e status.
+     */
+    suspend fun getTripById(tripId: String): Result<TripDto?> {
+        return runCatching {
+            postgrest.from("trips")
+                .select {
+                    filter {
+                        eq("id", tripId)
+                    }
+                }
+                .decodeSingleOrNull<TripDto>()
+        }
+    }
+
+    /**
+     * Registra ou atualiza o participante na viagem sem duplicar o par (trip_id, user_id).
      */
     suspend fun joinTrip(participant: ParticipantDto): Result<ParticipantDto> {
         return runCatching {
             postgrest.from("participants")
                 .upsert(participant) {
+                    onConflict = "trip_id,user_id"
                     select()
                 }
                 .decodeSingle<ParticipantDto>()
+        }
+    }
+
+    /**
+     * Remove o participante da viagem ao sair ou encerrar a sala.
+     */
+    suspend fun leaveTrip(participantId: String): Result<Unit> {
+        return runCatching {
+            postgrest.from("participants")
+                .delete {
+                    filter {
+                        eq("id", participantId)
+                    }
+                }
         }
     }
 
@@ -114,6 +146,118 @@ class TripRemoteRepository {
                         eq("id", tripId)
                     }
                 }
+        }
+    }
+
+    /**
+     * Atualiza o status da viagem (`ACTIVE`, `COMPLETED`, `CANCELLED`).
+     */
+    suspend fun updateTripStatus(tripId: String, status: String): Result<Unit> {
+        return runCatching {
+            postgrest.from("trips")
+                .update(
+                    {
+                        set("status", status)
+                    }
+                ) {
+                    filter {
+                        eq("id", tripId)
+                    }
+                }
+        }
+    }
+
+    /**
+     * Lista o histórico real de viagens criadas ou participadas pelo usuário no Supabase.
+     */
+    suspend fun getUserTrips(userId: String): Result<List<TripDto>> {
+        return runCatching {
+            val createdTrips = postgrest.from("trips")
+                .select {
+                    filter {
+                        eq("creator_id", userId)
+                    }
+                    order("created_at", Order.DESCENDING)
+                }
+                .decodeList<TripDto>()
+
+            val participations = postgrest.from("participants")
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                }
+                .decodeList<ParticipantDto>()
+
+            val joinedIds = participations.map { it.tripId }.distinct()
+            val joinedTrips = if (joinedIds.isNotEmpty()) {
+                postgrest.from("trips")
+                    .select {
+                        filter {
+                            isIn("id", joinedIds)
+                        }
+                        order("created_at", Order.DESCENDING)
+                    }
+                    .decodeList<TripDto>()
+            } else {
+                emptyList()
+            }
+
+            (createdTrips + joinedTrips)
+                .distinctBy { it.id ?: it.inviteCode }
+                .sortedByDescending { it.createdAt.orEmpty() }
+        }
+    }
+
+    /**
+     * Atualiza o perfil do participante na sala ativa em tempo real.
+     */
+    suspend fun updateParticipantProfile(
+        participantId: String,
+        displayName: String,
+        vehicleLabel: String,
+        role: String
+    ): Result<Unit> {
+        return runCatching {
+            postgrest.from("participants")
+                .update(
+                    {
+                        set("display_name", displayName)
+                        set("vehicle_or_status_label", vehicleLabel)
+                        set("role", role)
+                    }
+                ) {
+                    filter {
+                        eq("id", participantId)
+                    }
+                }
+        }
+    }
+
+    /**
+     * Salva ou atualiza o perfil persistente do usuário na tabela `user_profiles`.
+     */
+    suspend fun upsertUserProfile(profile: UserProfileDto): Result<Unit> {
+        return runCatching {
+            postgrest.from("user_profiles")
+                .upsert(profile) {
+                    onConflict = "user_id"
+                }
+        }
+    }
+
+    /**
+     * Recupera o perfil persistente do usuário na tabela `user_profiles`.
+     */
+    suspend fun getUserProfile(userId: String): Result<UserProfileDto?> {
+        return runCatching {
+            postgrest.from("user_profiles")
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                }
+                .decodeSingleOrNull<UserProfileDto>()
         }
     }
 

@@ -49,3 +49,12 @@ data class SeparationCheckResultDto(
     @SerialName("exceeded_threshold") val exceededThreshold: Boolean
 )
 
+@Serializable
+data class UserProfileDto(
+    @SerialName("user_id") val userId: String,
+    @SerialName("display_name") val displayName: String,
+    @SerialName("vehicle_label") val vehicleLabel: String,
+    @SerialName("default_role") val defaultRole: String = "MOVING_VEHICLE",
+    @SerialName("updated_at") val updatedAt: String? = null
+)
+

@@ -1,5 +1,6 @@
 package com.letsdrive.app.data.remote
 
+import com.letsdrive.app.data.local.PlatformStorage
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.auth.Auth
@@ -11,9 +12,14 @@ import io.github.jan.supabase.realtime.realtime
 
 object SupabaseConfig {
 
-    // Configurações do projeto Supabase
-    var supabaseUrl: String = "https://your-project-id.supabase.co"
-    var supabaseKey: String = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key"
+    private const val KEY_SUPABASE_URL = "supabase_url"
+    private const val KEY_SUPABASE_KEY = "supabase_anon_key"
+    private const val DEFAULT_SUPABASE_URL = "https://your-project-id.supabase.co"
+    private const val DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key"
+
+    // Configurações do projeto Supabase (carregadas do armazenamento local quando salvo)
+    var supabaseUrl: String = PlatformStorage.getString(KEY_SUPABASE_URL, DEFAULT_SUPABASE_URL)
+    var supabaseKey: String = PlatformStorage.getString(KEY_SUPABASE_KEY, DEFAULT_SUPABASE_KEY)
 
     val isConfigured: Boolean
         get() = supabaseUrl.startsWith("https://") &&
@@ -40,8 +46,10 @@ object SupabaseConfig {
         }
 
     fun updateCredentials(url: String, key: String) {
-        supabaseUrl = url.trim()
-        supabaseKey = key.trim()
+        supabaseUrl = url.trim().ifBlank { DEFAULT_SUPABASE_URL }
+        supabaseKey = key.trim().ifBlank { DEFAULT_SUPABASE_KEY }
+        PlatformStorage.putString(KEY_SUPABASE_URL, supabaseUrl)
+        PlatformStorage.putString(KEY_SUPABASE_KEY, supabaseKey)
         _client = null // Recria o cliente com as novas credenciais
     }
 

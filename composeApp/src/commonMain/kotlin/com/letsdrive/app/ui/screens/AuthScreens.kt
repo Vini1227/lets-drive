@@ -142,11 +142,16 @@ fun LoginScreen(
     onNavigateToRegister: () -> Unit,
     onBack: () -> Unit,
     errorMessage: String? = null,
+    infoMessage: String? = null,
     isLoading: Boolean = false,
-    onLoginWithEmail: (email: String, pass: String) -> Unit = { _, _ -> }
+    onLoginWithEmail: (email: String, pass: String) -> Unit = { _, _ -> },
+    onGoogleSignInClick: () -> Unit = {},
+    onResetPassword: (email: String) -> Unit = {}
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var showForgotPasswordDialog by remember { mutableStateOf(false) }
+    var resetEmailInput by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -188,6 +193,22 @@ fun LoginScreen(
                     Text(
                         text = errorMessage,
                         color = FigmaDangerRed,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+            }
+
+            if (!infoMessage.isNullOrBlank()) {
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = FigmaTealPrimary.copy(alpha = 0.18f)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = infoMessage,
+                        color = FigmaTealPrimary,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(10.dp)
                     )
@@ -260,10 +281,16 @@ fun LoginScreen(
             Spacer(Modifier.height(6.dp))
             Text(
                 text = "Esqueci a senha",
-                color = FigmaTextWhite,
-                fontSize = 10.sp,
+                color = FigmaTealPrimary,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.align(Alignment.End)
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .clickable(enabled = !isLoading) {
+                        resetEmailInput = username
+                        showForgotPasswordDialog = true
+                    }
+                    .padding(vertical = 2.dp)
             )
 
             Spacer(Modifier.height(24.dp))
@@ -325,7 +352,11 @@ fun LoginScreen(
             // Botão oficial "Entrar com o Google" com logo vetorial nítido
             GoogleSignInButton(
                 text = "Entrar com o Google",
-                onClick = { onLoginSuccess(username.ifBlank { "Caio" }) }
+                onClick = {
+                    if (!isLoading) {
+                        onGoogleSignInClick()
+                    }
+                }
             )
         }
 
@@ -339,6 +370,67 @@ fun LoginScreen(
             modifier = Modifier.clickable { onNavigateToRegister() }
         )
     }
+
+    if (showForgotPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { showForgotPasswordDialog = false },
+            containerColor = FigmaDarkBg,
+            titleContentColor = FigmaTextWhite,
+            textContentColor = FigmaTextWhite,
+            title = {
+                Text(
+                    text = "Recuperar senha",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Informe o e-mail da sua conta para enviarmos o link de redefinição.",
+                        color = FigmaTextWhite.copy(alpha = 0.78f),
+                        fontSize = 13.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = resetEmailInput,
+                        onValueChange = { resetEmailInput = it },
+                        placeholder = {
+                            Text(
+                                "seuemail@exemplo.com",
+                                color = FigmaTextWhite.copy(alpha = 0.3f),
+                                fontSize = 13.sp
+                            )
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(7.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = FigmaTealPrimary,
+                            unfocusedBorderColor = FigmaTextWhite.copy(alpha = 0.5f),
+                            focusedTextColor = FigmaTextWhite,
+                            unfocusedTextColor = FigmaTextWhite
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onResetPassword(resetEmailInput)
+                        showForgotPasswordDialog = false
+                    }
+                ) {
+                    Text("Enviar", color = FigmaTealPrimary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showForgotPasswordDialog = false }) {
+                    Text("Cancelar", color = FigmaTextWhite.copy(alpha = 0.7f))
+                }
+            }
+        )
+    }
 }
 
 /**
@@ -350,7 +442,8 @@ fun RegisterScreen(
     onBackToLogin: () -> Unit,
     errorMessage: String? = null,
     isLoading: Boolean = false,
-    onRegisterWithEmail: (name: String, email: String, vehicle: String, pass: String) -> Unit = { _, _, _, _ -> }
+    onRegisterWithEmail: (name: String, email: String, vehicle: String, pass: String) -> Unit = { _, _, _, _ -> },
+    onGoogleSignInClick: () -> Unit = {}
 ) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -520,7 +613,11 @@ fun RegisterScreen(
 
             GoogleSignInButton(
                 text = "Cadastrar com o Google",
-                onClick = { onRegisterSuccess(name.ifBlank { "Caio" }, vehicle.ifBlank { "Fiat Uno" }) }
+                onClick = {
+                    if (!isLoading) {
+                        onGoogleSignInClick()
+                    }
+                }
             )
         }
     }

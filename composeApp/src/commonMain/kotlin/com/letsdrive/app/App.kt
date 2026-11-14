@@ -39,9 +39,16 @@ fun App() {
                         onNavigateToRegister = { stateHolder.navigateTo(AppScreen.REGISTER) },
                         onBack = { stateHolder.navigateTo(AppScreen.WELCOME) },
                         errorMessage = uiState.authErrorMessage,
+                        infoMessage = uiState.authInfoMessage,
                         isLoading = uiState.isAuthLoading,
                         onLoginWithEmail = { email, pass ->
                             stateHolder.loginWithEmail(email, pass)
+                        },
+                        onGoogleSignInClick = {
+                            stateHolder.loginWithGoogle()
+                        },
+                        onResetPassword = { email ->
+                            stateHolder.resetPassword(email)
                         }
                     )
                 }
@@ -57,6 +64,9 @@ fun App() {
                         isLoading = uiState.isAuthLoading,
                         onRegisterWithEmail = { name, email, vehicle, pass ->
                             stateHolder.registerWithEmail(name, email, vehicle, pass)
+                        },
+                        onGoogleSignInClick = {
+                            stateHolder.loginWithGoogle()
                         }
                     )
                 }
@@ -109,8 +119,11 @@ fun App() {
                                     initialDestination = uiState.currentTrip.destinationName,
                                     initialMaxDistanceKm = uiState.maxSeparationDistanceKm,
                                     initialRole = uiState.userRole,
-                                    onConfirmRoute = { origin, dest, maxDist, role ->
-                                        stateHolder.confirmDestinationAndGenerateRoom(origin, dest, maxDist, role)
+                                    initialExtraStop = uiState.currentTrip.intermediateStopAddress,
+                                    currentUserLocation = uiState.currentTrip.participants.firstOrNull()?.location
+                                        ?: uiState.currentTrip.originCoordinates,
+                                    onConfirmRoute = { origin, dest, extraStop, maxDist, role ->
+                                        stateHolder.confirmDestinationAndGenerateRoom(origin, dest, maxDist, role, extraStop)
                                     },
                                     onBack = { stateHolder.navigateTo(AppScreen.HOME) },
                                     onNavigateMenu = { target -> stateHolder.navigateTo(target) }
@@ -123,7 +136,8 @@ fun App() {
                                     userHandle = uiState.userHandle,
                                     userVehicle = uiState.userVehicle,
                                     onOpenMapClick = { stateHolder.navigateTo(AppScreen.SHARED_MAP) },
-                                    onCancelTripClick = { stateHolder.navigateTo(AppScreen.HOME) },
+                                    onShareInviteClick = { stateHolder.shareCurrentTripInvite() },
+                                    onCancelTripClick = { stateHolder.cancelCurrentTrip() },
                                     onNavigateMenu = { target -> stateHolder.navigateTo(target) }
                                 )
                             }
@@ -140,6 +154,9 @@ fun App() {
                                     onToggleSimulateSeparation = { stateHolder.toggleRouteSeparationSimulation() },
                                     onToggleSharingLocation = { stateHolder.toggleLocationSharing(it) },
                                     onConfirmMeetingPoint = { mpName -> stateHolder.confirmMeetingPoint(mpName) },
+                                    onCompleteTrip = { stateHolder.completeCurrentTrip() },
+                                    onCancelTrip = { stateHolder.cancelCurrentTrip() },
+                                    onShareInvite = { stateHolder.shareCurrentTripInvite() },
                                     onNavigateMenu = { target -> stateHolder.navigateTo(target) }
                                 )
                             }
@@ -157,6 +174,7 @@ fun App() {
                                             role = uiState.userRole
                                         )
                                     },
+                                    onRefreshHistory = { stateHolder.syncTripHistoryFromRemote() },
                                     onNavigateMenu = { target -> stateHolder.navigateTo(target) }
                                 )
                             }
@@ -167,12 +185,15 @@ fun App() {
                                     userVehicle = uiState.userVehicle,
                                     maxSeparationDistanceKm = uiState.maxSeparationDistanceKm,
                                     isSharingLocation = uiState.isSharingLocation,
+                                    areNotificationsEnabled = uiState.areNotificationsEnabled,
                                     isSupabaseConnected = uiState.isSupabaseConnected,
                                     supabaseProjectUrl = uiState.supabaseProjectUrl,
                                     onUpdateMaxDistance = { stateHolder.updateMaxSeparationThreshold(it) },
                                     onToggleSharingLocation = { stateHolder.toggleLocationSharing(it) },
+                                    onToggleNotifications = { stateHolder.toggleNotifications(it) },
+                                    onTestNotification = { stateHolder.sendTestSeparationNotification() },
                                     onUpdateSupabaseCredentials = { url, key -> stateHolder.updateSupabaseCredentials(url, key) },
-                                    onLogoutClick = { stateHolder.navigateTo(AppScreen.WELCOME) },
+                                    onLogoutClick = { stateHolder.logoutUser() },
                                     onNavigateMenu = { target -> stateHolder.navigateTo(target) }
                                 )
                             }

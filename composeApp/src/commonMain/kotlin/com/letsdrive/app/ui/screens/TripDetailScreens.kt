@@ -35,6 +35,7 @@ fun HistoryScreen(
     userVehicle: String,
     recentTrips: List<HistoricalTripItem>,
     onRepeatTripClick: (HistoricalTripItem) -> Unit,
+    onRefreshHistory: () -> Unit = {},
     onNavigateMenu: (AppScreen) -> Unit
 ) {
     Box(
@@ -58,13 +59,41 @@ fun HistoryScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            Text(
-                text = "Viagens Recentes",
-                color = FigmaTextWhite,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 24.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Viagens Recentes",
+                    color = FigmaTextWhite,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onRefreshHistory() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Atualizar histórico",
+                        tint = FigmaTealPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Atualizar",
+                        color = FigmaTealPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
 
             Spacer(Modifier.height(14.dp))
 
@@ -76,7 +105,7 @@ fun HistoryScreen(
                 ) {
                     // Data no canto superior direito (ex: "02/11/26" igual ao node 30:86)
                     Text(
-                        text = item.dateLabel,
+                        text = if (item.inviteCode.isNotBlank()) "${item.dateLabel} • ${item.inviteCode}" else item.dateLabel,
                         color = FigmaTextSubtle,
                         fontSize = 11.sp,
                         modifier = Modifier
@@ -168,10 +197,13 @@ fun SettingsScreen(
     userVehicle: String,
     maxSeparationDistanceKm: Double,
     isSharingLocation: Boolean,
+    areNotificationsEnabled: Boolean = true,
     isSupabaseConnected: Boolean = false,
     supabaseProjectUrl: String = "",
     onUpdateMaxDistance: (Double) -> Unit,
     onToggleSharingLocation: (Boolean) -> Unit,
+    onToggleNotifications: (Boolean) -> Unit = {},
+    onTestNotification: () -> Unit = {},
     onUpdateSupabaseCredentials: (url: String, key: String) -> Unit = { _, _ -> },
     onLogoutClick: () -> Unit,
     onNavigateMenu: (AppScreen) -> Unit
@@ -300,6 +332,66 @@ fun SettingsScreen(
                                 checkedTrackColor = FigmaTealPrimary
                             )
                         )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Card: Notificações Nativas de Alerta
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = FigmaSheetBg),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Notificações Nativas de Alerta",
+                                    color = FigmaTextWhite,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Receba alertas do sistema quando algum participante ultrapassar a distância máxima ou confirmar ponto de reencontro.",
+                                    color = FigmaTextMuted,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Switch(
+                                checked = areNotificationsEnabled,
+                                onCheckedChange = onToggleNotifications,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = FigmaTealPrimary
+                                )
+                            )
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = onTestNotification,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, FigmaOrangeLogo),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = null,
+                                tint = FigmaOrangeLogo,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "Disparar Notificação de Teste",
+                                color = FigmaOrangeLogo,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
 

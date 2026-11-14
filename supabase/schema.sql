@@ -82,15 +82,25 @@ as $$
       and p.id != p_leader_participant_id;
 $$;
 
--- 5. Habilitar Supabase Realtime para propagação de posições e participantes ao vivo
+-- 5. Perfil persistente do usuário para nome, veículo e papel padrão
+create table if not exists public.user_profiles (
+    user_id uuid primary key,
+    display_name text not null,
+    vehicle_label text not null,
+    default_role text not null default 'MOVING_VEHICLE' check (default_role in ('MOVING_VEHICLE', 'STATIONARY_HOST', 'WALKING_TRANSIT')),
+    updated_at timestamptz not null default now()
+);
+
+-- 6. Habilitar Supabase Realtime para propagação de posições e participantes ao vivo
 alter publication supabase_realtime add table public.trips;
 alter publication supabase_realtime add table public.participants;
 alter publication supabase_realtime add table public.participant_locations;
 
--- 6. Políticas de Acesso RLS (Row Level Security) permissivas para desenvolvimento e uso seguro
+-- 7. Políticas de Acesso RLS (Row Level Security) permissivas para desenvolvimento e uso seguro
 alter table public.trips enable row level security;
 alter table public.participants enable row level security;
 alter table public.participant_locations enable row level security;
+alter table public.user_profiles enable row level security;
 
 create policy "Permitir leitura pública ou autenticada de viagens"
     on public.trips for select using (true);
@@ -105,8 +115,17 @@ create policy "Permitir inserção de participantes"
     on public.participants for insert with check (true);
 create policy "Permitir atualização de participantes"
     on public.participants for update using (true);
+create policy "Permitir saída de participantes"
+    on public.participants for delete using (true);
 
 create policy "Permitir leitura pública ou autenticada de localizações"
     on public.participant_locations for select using (true);
 create policy "Permitir inserção e atualização de localizações"
     on public.participant_locations for all using (true) with check (true);
+
+create policy "Permitir leitura pública ou autenticada de perfis"
+    on public.user_profiles for select using (true);
+create policy "Permitir inserção de perfis"
+    on public.user_profiles for insert with check (true);
+create policy "Permitir atualização de perfis"
+    on public.user_profiles for update using (true);

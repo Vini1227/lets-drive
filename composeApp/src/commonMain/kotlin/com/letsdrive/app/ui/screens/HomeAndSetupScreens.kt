@@ -36,12 +36,17 @@ import androidx.compose.ui.unit.sp
 import com.letsdrive.app.data.location.PlaceSuggestion
 import com.letsdrive.app.data.location.RouteMetrics
 import com.letsdrive.app.data.location.RouteSearchService
+import com.letsdrive.app.data.share.InviteShareMessages
+import com.letsdrive.app.data.share.PlatformShareAndQr
+import com.letsdrive.app.data.share.QrCodeEncoder
 import com.letsdrive.app.generated.resources.*
+import com.letsdrive.app.model.LatLng
 import com.letsdrive.app.model.ParticipantRole
 import com.letsdrive.app.model.Trip
 import com.letsdrive.app.state.AppScreen
 import com.letsdrive.app.ui.components.FigmaTopProfileBar
 import com.letsdrive.app.ui.theme.*
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import kotlin.math.roundToInt
 
@@ -241,6 +246,10 @@ fun JoinCodeScreen(
 ) {
     var tripCode by remember { mutableStateOf("") }
     var selectedRole by remember { mutableStateOf(defaultRole) }
+    var showInviteHelperDialog by remember { mutableStateOf(false) }
+    var pastedInviteInput by remember { mutableStateOf("") }
+    var scanFeedback by remember { mutableStateOf<String?>(null) }
+    val clipboardManager = LocalClipboardManager.current
 
     Box(
         modifier = Modifier
@@ -296,11 +305,25 @@ fun JoinCodeScreen(
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = "Dificuldade Com O Código?",
-                    color = FigmaTextWhite,
-                    fontSize = 9.sp,
+                    color = FigmaTealPrimary,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.align(Alignment.End)
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { showInviteHelperDialog = true }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
                 )
+
+                if (scanFeedback != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = scanFeedback.orEmpty(),
+                        color = FigmaNeonCyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
 
                 Spacer(Modifier.height(14.dp))
 
@@ -363,6 +386,44 @@ fun JoinCodeScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                Spacer(Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(FigmaSheetBg)
+                        .border(1.dp, FigmaTealPrimary.copy(alpha = 0.65f), RoundedCornerShape(7.dp))
+                        .clickable {
+                            val detected = PlatformShareAndQr.scanOrReadInviteCode()
+                                ?: QrCodeEncoder.extractInviteCode(clipboardManager.getText()?.text)
+                            if (detected != null) {
+                                tripCode = detected
+                                scanFeedback = "Código $detected detectado do convite!"
+                            } else {
+                                pastedInviteInput = clipboardManager.getText()?.text.orEmpty()
+                                showInviteHelperDialog = true
+                            }
+                        },
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.QrCodeScanner,
+                        contentDescription = null,
+                        tint = FigmaTealPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Ler QR Code / Colar Convite",
+                        color = FigmaTealPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
 
             Spacer(Modifier.height(22.dp))
@@ -391,6 +452,73 @@ fun JoinCodeScreen(
                     fontWeight = FontWeight.SemiBold
                 )
             }
+        }
+
+        if (showInviteHelperDialog) {
+            val extractedPreview = QrCodeEncoder.extractInviteCode(pastedInviteInput)
+            AlertDialog(
+                onDismissRequest = { showInviteHelperDialog = false },
+                containerColor = FigmaSheetBg,
+                title = {
+                    Text(
+                        text = "Ler QR Code ou Colar Convite",
+                        color = FigmaTextWhite,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column {
+                        Text(
+                            text = "Aponte a câmera nativa do celular para o QR Code do anfitrião ou cole abaixo o texto/link recebido no WhatsApp:",
+                            color = FigmaTextMuted,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = pastedInviteInput,
+                            onValueChange = { pastedInviteInput = it },
+                            placeholder = {
+                                Text("Ex: https://letsdrive.app/#AB123456 ou #AB123456", fontSize = 11.sp)
+                            },
+                            maxLines = 3,
+                            shape = RoundedCornerShape(7.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (extractedPreview != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = "Código extraído: $extractedPreview",
+                                color = FigmaNeonCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val codeToUse = extractedPreview ?: pastedInviteInput.trim()
+                            if (codeToUse.isNotBlank()) {
+                                tripCode = codeToUse
+                                scanFeedback = "Convite aplicado: $codeToUse"
+                                showInviteHelperDialog = false
+                                onJoinTrip(codeToUse, selectedRole)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = FigmaTealPrimary)
+                    ) {
+                        Text("Usar Código e Entrar", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showInviteHelperDialog = false }) {
+                        Text("Fechar", color = FigmaTextMuted)
+                    }
+                }
+            )
         }
     }
 }
@@ -442,25 +570,35 @@ fun ConfirmRouteScreen(
     initialDestination: String,
     initialMaxDistanceKm: Double,
     initialRole: ParticipantRole,
-    onConfirmRoute: (origin: String, destination: String, maxDistKm: Double, role: ParticipantRole) -> Unit,
+    initialExtraStop: String? = null,
+    currentUserLocation: LatLng = LatLng(-9.6498, -35.7089),
+    onConfirmRoute: (origin: String, destination: String, extraStop: String?, maxDistKm: Double, role: ParticipantRole) -> Unit,
     onBack: () -> Unit,
     onNavigateMenu: (AppScreen) -> Unit
 ) {
     var origin by remember { mutableStateOf(initialOrigin) }
     var destination by remember { mutableStateOf(initialDestination) }
-    var extraStop by remember { mutableStateOf("") }
-    var showExtraStop by remember { mutableStateOf(false) }
+    var extraStop by remember { mutableStateOf(initialExtraStop.orEmpty()) }
+    var showExtraStop by remember { mutableStateOf(!initialExtraStop.isNullOrBlank()) }
+    var activeSearchTarget by remember { mutableStateOf("dest") }
+    var isResolvingGpsOrigin by remember { mutableStateOf(false) }
     var maxDistanceKm by remember { mutableStateOf(initialMaxDistanceKm.toFloat()) }
     var selectedRole by remember { mutableStateOf(initialRole) }
 
+    val coroutineScope = rememberCoroutineScope()
     val routeSearchService = remember { RouteSearchService() }
     var placeSuggestions by remember { mutableStateOf<List<PlaceSuggestion>>(emptyList()) }
     var routeMetrics by remember { mutableStateOf<RouteMetrics?>(null) }
 
-    // Busca sugestões de destino (OpenStreetMap Nominatim + catálogo rápido) e calcula rota real via OSRM
-    LaunchedEffect(destination, origin) {
-        placeSuggestions = routeSearchService.searchPlaces(destination)
-        routeMetrics = routeSearchService.calculateRoute(origin, destination)
+    // Busca sugestões (OpenStreetMap Nominatim + catálogo) e calcula rota OSRM (com parada opcional)
+    LaunchedEffect(destination, origin, extraStop, showExtraStop, activeSearchTarget) {
+        val activeQuery = if (activeSearchTarget == "stop" && showExtraStop) extraStop else destination
+        placeSuggestions = routeSearchService.searchPlaces(activeQuery)
+        routeMetrics = routeSearchService.calculateRoute(
+            originText = origin,
+            destinationText = destination,
+            extraStopText = if (showExtraStop) extraStop else null
+        )
     }
 
     Box(
@@ -527,6 +665,34 @@ fun ConfirmRouteScreen(
                         leadingIcon = {
                             Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White)
                         },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (!isResolvingGpsOrigin) {
+                                        isResolvingGpsOrigin = true
+                                        coroutineScope.launch {
+                                            origin = routeSearchService.reverseGeocode(currentUserLocation)
+                                            isResolvingGpsOrigin = false
+                                        }
+                                    }
+                                }
+                            ) {
+                                if (isResolvingGpsOrigin) {
+                                    CircularProgressIndicator(
+                                        color = FigmaTealPrimary,
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.MyLocation,
+                                        contentDescription = "Usar localização GPS atual",
+                                        tint = FigmaTealPrimary,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                            }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(7.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -543,7 +709,10 @@ fun ConfirmRouteScreen(
                     Box(modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = destination,
-                            onValueChange = { destination = it },
+                            onValueChange = {
+                                destination = it
+                                activeSearchTarget = "dest"
+                            },
                             leadingIcon = {
                                 Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White)
                             },
@@ -566,10 +735,13 @@ fun ConfirmRouteScreen(
                                 .size(24.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFFD9D9D9))
-                                .clickable { showExtraStop = !showExtraStop },
+                                .clickable {
+                                    showExtraStop = !showExtraStop
+                                    activeSearchTarget = if (showExtraStop) "stop" else "dest"
+                                },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("+", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(if (showExtraStop) "-" else "+", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
                     }
 
@@ -577,13 +749,28 @@ fun ConfirmRouteScreen(
                         Spacer(Modifier.height(10.dp))
                         OutlinedTextField(
                             value = extraStop,
-                            onValueChange = { extraStop = it },
-                            placeholder = { Text("Parada intermediária opcional", fontSize = 12.sp) },
+                            onValueChange = {
+                                extraStop = it
+                                activeSearchTarget = "stop"
+                            },
+                            placeholder = {
+                                Text(
+                                    "Parada intermediária opcional",
+                                    color = Color.White.copy(alpha = 0.45f),
+                                    fontSize = 12.sp
+                                )
+                            },
                             leadingIcon = {
                                 Icon(Icons.Default.AddLocationAlt, contentDescription = null, tint = FigmaTealPrimary)
                             },
                             singleLine = true,
                             shape = RoundedCornerShape(7.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = FigmaTealPrimary,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.55f),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -602,7 +789,13 @@ fun ConfirmRouteScreen(
                 ) {
                     placeSuggestions.forEach { suggestion ->
                         AssistChip(
-                            onClick = { destination = suggestion.fullAddress },
+                            onClick = {
+                                if (activeSearchTarget == "stop" && showExtraStop) {
+                                    extraStop = suggestion.fullAddress
+                                } else {
+                                    destination = suggestion.fullAddress
+                                }
+                            },
                             label = {
                                 Text(
                                     text = suggestion.title,
@@ -743,7 +936,8 @@ fun ConfirmRouteScreen(
                     .background(FigmaTealPrimary)
                     .clickable {
                         val roundedDist = (maxDistanceKm * 10).roundToInt() / 10.0
-                        onConfirmRoute(origin, destination, roundedDist, selectedRole)
+                        val activeStop = extraStop.trim().takeIf { showExtraStop && it.isNotBlank() }
+                        onConfirmRoute(origin, destination, activeStop, roundedDist, selectedRole)
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -767,6 +961,7 @@ fun RoomCreatedScreen(
     userHandle: String,
     userVehicle: String,
     onOpenMapClick: () -> Unit,
+    onShareInviteClick: () -> Unit = {},
     onCancelTripClick: () -> Unit,
     onNavigateMenu: (AppScreen) -> Unit
 ) {
@@ -876,7 +1071,41 @@ fun RoomCreatedScreen(
                 modifier = Modifier.size(195.dp)
             )
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(14.dp))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(FigmaDarkBg.copy(alpha = 0.65f))
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = "Participantes na sala (${trip.participants.size})",
+                    color = FigmaNeonCyan,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                trip.participants.forEach { participant ->
+                    Text(
+                        text = "• ${participant.displayName} (${participant.vehicleLabel})",
+                        color = FigmaTextWhite,
+                        fontSize = 11.sp,
+                        maxLines = 1
+                    )
+                }
+                if (trip.participants.size == 1) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "Compartilhe o código ${trip.inviteCode} para outros participantes entrarem.",
+                        color = FigmaTextMuted,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
 
             // Botão Principal para Abrir o Mapa da Viagem (iPhone 17 - 5)
             Box(
@@ -893,6 +1122,44 @@ fun RoomCreatedScreen(
                     color = FigmaTextWhite,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Botão Nativo de Share Sheet + Cópia de Convite Completo
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(FigmaDarkBg)
+                    .border(1.dp, FigmaTealPrimary, RoundedCornerShape(7.dp))
+                    .clickable {
+                        val inviteMsg = InviteShareMessages.buildInviteText(
+                            inviteCode = trip.inviteCode,
+                            destinationName = trip.destinationName,
+                            inviteLink = trip.inviteLink
+                        )
+                        clipboardManager.setText(AnnotatedString(inviteMsg))
+                        copiedFeedback = true
+                        onShareInviteClick()
+                    },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = null,
+                    tint = FigmaTealPrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Compartilhar Convite (WhatsApp / Sistema)",
+                    color = FigmaTealPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
@@ -924,78 +1191,28 @@ private fun QrCodeGraphic(
     inviteCode: String,
     modifier: Modifier = Modifier
 ) {
-    val seed = remember(inviteCode) {
-        inviteCode.fold(5381) { acc, ch -> ((acc shl 5) + acc) xor ch.code }
-    }
+    val payload = remember(inviteCode) { QrCodeEncoder.buildQrPayload(inviteCode) }
+    val matrix = remember(payload) { QrCodeEncoder.encodeVersion2EccL(payload) }
 
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(Color.White)
-            .padding(10.dp),
+            .padding(14.dp),
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val grid = 25
+            val grid = matrix.size
             val cellSize = size.width / grid.toFloat()
-
-            fun isFinderPattern(r: Int, c: Int): Boolean {
-                val topLeft = r in 0..6 && c in 0..6
-                val topRight = r in 0..6 && c in (grid - 7) until grid
-                val bottomLeft = r in (grid - 7) until grid && c in 0..6
-                return topLeft || topRight || bottomLeft
-            }
-
-            fun drawFinderSquare(startR: Int, startC: Int) {
-                for (r in 0..6) {
-                    for (c in 0..6) {
-                        val isBorder = r == 0 || r == 6 || c == 0 || c == 6
-                        val isInner = r in 2..4 && c in 2..4
-                        if (isBorder || isInner) {
-                            drawRect(
-                                color = Color.Black,
-                                topLeft = Offset((startC + c) * cellSize, (startR + r) * cellSize),
-                                size = Size(cellSize * 1.02f, cellSize * 1.02f)
-                            )
-                        }
-                    }
-                }
-            }
-
-            drawFinderSquare(0, 0)
-            drawFinderSquare(0, grid - 7)
-            drawFinderSquare(grid - 7, 0)
+            val bleed = 0.5f
 
             for (r in 0 until grid) {
                 for (c in 0 until grid) {
-                    if (isFinderPattern(r, c)) continue
-                    // Zona de silêncio em torno dos 3 Finder Patterns
-                    if ((r == 7 && (c <= 7 || c >= grid - 8)) ||
-                        (r == grid - 8 && c <= 7) ||
-                        (c == 7 && (r <= 7 || r >= grid - 8)) ||
-                        (c == grid - 8 && r <= 7)
-                    ) continue
-
-                    // Timing patterns na linha 6 e coluna 6
-                    if (r == 6 || c == 6) {
-                        if ((r + c) % 2 == 0) {
-                            drawRect(
-                                color = Color.Black,
-                                topLeft = Offset(c * cellSize, r * cellSize),
-                                size = Size(cellSize * 1.02f, cellSize * 1.02f)
-                            )
-                        }
-                        continue
-                    }
-
-                    // Bits determinísticos derivados do código único da sala (#AB12XXXX)
-                    val hash = (seed xor (r * 31 + c * 97) xor ((r * c) shl 3))
-                    val bit = ((hash ushr ((r + c) % 16)) and 1) == 1
-                    if (bit) {
+                    if (matrix[r][c]) {
                         drawRect(
                             color = Color.Black,
                             topLeft = Offset(c * cellSize, r * cellSize),
-                            size = Size(cellSize * 1.02f, cellSize * 1.02f)
+                            size = Size(cellSize + bleed, cellSize + bleed)
                         )
                     }
                 }

@@ -1,6 +1,7 @@
 package com.letsdrive.app.data.repository
 
 import com.letsdrive.app.data.remote.SupabaseConfig
+import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.auth.user.UserInfo
@@ -10,9 +11,11 @@ import kotlinx.serialization.json.put
 
 class AuthRepository {
 
-    private val auth = SupabaseConfig.auth
+    private val auth
+        get() = SupabaseConfig.auth
 
-    val sessionStatus: StateFlow<SessionStatus> = auth.sessionStatus
+    val sessionStatus: StateFlow<SessionStatus>
+        get() = auth.sessionStatus
 
     val currentUser: UserInfo?
         get() = auth.currentUserOrNull()
@@ -58,6 +61,34 @@ class AuthRepository {
     /**
      * Encerra a sessão do usuário.
      */
+    suspend fun signInWithGoogle(): Result<Unit> {
+        return runCatching {
+            auth.signInWith(Google)
+        }
+    }
+
+    suspend fun sendPasswordResetEmail(emailInput: String): Result<Unit> {
+        return runCatching {
+            auth.resetPasswordForEmail(emailInput)
+        }
+    }
+
+    suspend fun updateUserMetadata(
+        displayName: String,
+        vehicleLabel: String,
+        roleName: String
+    ): Result<Unit> {
+        return runCatching {
+            auth.updateUser {
+                data = buildJsonObject {
+                    put("display_name", displayName)
+                    put("vehicle_label", vehicleLabel)
+                    put("user_role", roleName)
+                }
+            }
+        }
+    }
+
     suspend fun signOut(): Result<Unit> {
         return runCatching {
             auth.signOut()

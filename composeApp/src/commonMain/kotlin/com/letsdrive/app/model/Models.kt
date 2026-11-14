@@ -1,5 +1,7 @@
 package com.letsdrive.app.model
 
+import kotlinx.serialization.Serializable
+
 enum class TripStatus {
     ACTIVE,
     COMPLETED,
@@ -60,12 +62,14 @@ data class ParticipantMeetingEta(
     val etaMinutes: Int
 )
 
+@Serializable
 data class HistoricalTripItem(
     val id: String,
     val dateLabel: String,
     val originAddress: String,
     val destinationAddress: String,
-    val isCompleted: Boolean
+    val isCompleted: Boolean,
+    val inviteCode: String = ""
 )
 
 data class Trip(
@@ -76,7 +80,11 @@ data class Trip(
     val originAddress: String,
     val destinationName: String,
     val destinationAddress: String,
+    val originCoordinates: LatLng = LatLng(-9.6498, -35.7089),
     val destinationCoordinates: LatLng,
+    val intermediateStopAddress: String? = null,
+    val intermediateStopCoordinates: LatLng? = null,
+    val routeGeometry: List<LatLng> = emptyList(),
     val maxSeparationDistanceKm: Double = 2.0,
     val status: TripStatus,
     val participants: List<Participant>,

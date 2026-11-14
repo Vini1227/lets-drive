@@ -42,6 +42,9 @@ fun SharedMapScreen(
     onToggleSimulateSeparation: () -> Unit,
     onToggleSharingLocation: (Boolean) -> Unit,
     onConfirmMeetingPoint: (String) -> Unit = {},
+    onCompleteTrip: () -> Unit = {},
+    onCancelTrip: () -> Unit = {},
+    onShareInvite: () -> Unit = {},
     onNavigateMenu: (AppScreen) -> Unit
 ) {
     var isSheetExpanded by remember { mutableStateOf(false) }
@@ -54,6 +57,14 @@ fun SharedMapScreen(
             isSimulatingSeparation = isSimulatingSeparation,
             focusedParticipantId = focusedParticipantId,
             selectedMeetingPointName = trip.suggestedMeetingPoints.firstOrNull()?.name,
+            destinationName = trip.destinationName.substringBefore(",").trim().ifBlank { "Destino" },
+            originCoordinates = trip.originCoordinates,
+            destinationCoordinates = trip.destinationCoordinates,
+            intermediateStopName = trip.intermediateStopAddress,
+            intermediateStopCoordinates = trip.intermediateStopCoordinates,
+            routeGeometry = trip.routeGeometry,
+            maxSeparationDistanceKm = trip.maxSeparationDistanceKm,
+            meetingPointCoordinates = trip.suggestedMeetingPoints.firstOrNull()?.coordinates,
             onSelectParticipant = { id ->
                 onFocusParticipant(id)
                 isSheetExpanded = true
@@ -73,30 +84,54 @@ fun SharedMapScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Badge da Sala e Limite Geoespacial
+                // Badge da Sala e Limite Geoespacial + Botão de Compartilhar Convite
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(FigmaDarkBg.copy(alpha = 0.88f))
-                        .border(1.dp, FigmaTealPrimary.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
-                        .clickable { onNavigateMenu(AppScreen.ROOM_CREATED) }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(FigmaDarkBg.copy(alpha = 0.88f))
+                            .border(1.dp, FigmaTealPrimary.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
+                            .clickable { onNavigateMenu(AppScreen.ROOM_CREATED) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (isSharingLocation) FigmaTealPrimary else FigmaOrangeLogo)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "${trip.inviteCode} • ${trip.maxSeparationDistanceKm}km" +
+                                if (isHardwareGpsActive) " • GPS" else " • Sync",
+                            color = FigmaTextWhite,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
+
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(32.dp)
                             .clip(CircleShape)
-                            .background(if (isSharingLocation) FigmaTealPrimary else FigmaOrangeLogo)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = "${trip.inviteCode} • Limite: ${trip.maxSeparationDistanceKm} km" +
-                            if (isHardwareGpsActive) " • GPS Real" else " • GPS Sync",
-                        color = FigmaTextWhite,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                            .background(FigmaDarkBg.copy(alpha = 0.88f))
+                            .border(1.dp, FigmaTealPrimary.copy(alpha = 0.6f), CircleShape)
+                            .clickable { onShareInvite() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Compartilhar convite da sala",
+                            tint = FigmaTealPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
 
                 // Botão para testar o pop-up de afastamento máximo
@@ -105,7 +140,7 @@ fun SharedMapScreen(
                     onClick = onToggleSimulateSeparation,
                     label = {
                         Text(
-                            text = if (isSimulatingSeparation) "Lucas Afastado" else "Testar Afastamento",
+                            text = if (isSimulatingSeparation) "Simulando Desvio" else "Testar Afastamento",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -261,6 +296,15 @@ fun SharedMapScreen(
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Light
             )
+            if (!trip.intermediateStopAddress.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Parada: ${trip.intermediateStopAddress}",
+                    color = FigmaTextWhite.copy(alpha = 0.78f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
 
             Spacer(Modifier.height(14.dp))
 
@@ -300,6 +344,89 @@ fun SharedMapScreen(
                             color = if (isSep) FigmaOrangeLogo else FigmaNeonCyan,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                if (trip.participants.size == 1) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(FigmaSheetBg.copy(alpha = 0.7f))
+                            .border(1.dp, FigmaTealPrimary.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PersonAdd,
+                            contentDescription = null,
+                            tint = FigmaTealPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = "Aguardando outros participantes entrarem com o código ${trip.inviteCode}",
+                            color = FigmaTextMuted,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(FigmaTealPrimary)
+                            .clickable { onCompleteTrip() },
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Concluir Viagem",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(FigmaSecondaryButtonBg)
+                            .border(1.dp, FigmaDangerRed.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
+                            .clickable { onCancelTrip() },
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cancel,
+                            contentDescription = null,
+                            tint = FigmaDangerRed,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Cancelar / Sair",
+                            color = FigmaTextWhite,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
